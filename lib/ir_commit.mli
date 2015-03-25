@@ -48,6 +48,8 @@ module type HISTORY = sig
   val merge: t -> commit Ir_merge.t
   val lcas: t -> ?max_depth:int -> ?n:int -> commit -> commit ->
     [`Ok of commit list | `Max_depth_reached | `Too_many_lcas ] Lwt.t
+  val lcas_fast: t -> ?max_depth:int -> ?n:int -> commit -> commit ->
+    [`Ok of commit list | `Max_depth_reached | `Too_many_lcas ] Lwt.t
   val lca: t -> ?max_depth:int -> ?n:int -> commit list -> commit option Ir_merge.result Lwt.t
   val three_way_merge: t -> ?max_depth:int -> ?n:int -> commit -> commit -> commit Ir_merge.result Lwt.t
   val closure: t -> min:commit list -> max:commit list -> commit list Lwt.t

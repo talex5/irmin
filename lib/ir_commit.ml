@@ -97,6 +97,8 @@ module type HISTORY = sig
   val merge: t -> commit Ir_merge.t
   val lcas: t -> ?max_depth:int -> ?n:int -> commit -> commit ->
     [`Ok of commit list | `Max_depth_reached | `Too_many_lcas] Lwt.t
+  val lcas_fast: t -> ?max_depth:int -> ?n:int -> commit -> commit ->
+    [`Ok of commit list | `Max_depth_reached | `Too_many_lcas] Lwt.t
   val lca: t -> ?max_depth:int -> ?n:int -> commit list -> commit option Ir_merge.result Lwt.t
   val three_way_merge: t -> ?max_depth:int -> ?n:int -> commit -> commit -> commit Ir_merge.result Lwt.t
   val closure: t -> min:commit list -> max:commit list -> commit list Lwt.t
@@ -317,7 +319,7 @@ struct
   let is_complete p = KSet.subset p.todo p.shared
 
   let lca_calls = ref 0
-  let lcas t ?(max_depth=256) ?n c1 c2 =
+  let lcas_slow t ?(max_depth=256) ?n c1 c2 =
     incr lca_calls;
     let ok set = Lwt.return (`Ok (KSet.to_list set)) in
     let rec aux prefix =
@@ -341,6 +343,141 @@ struct
       let prefix = empty_prefix () in
       let max = KSet.of_list [c1; c2] in
       aux { prefix with max; todo = max }
+
+  type state =
+    | Seen1 | Seen2
+    | SeenBoth
+    | Unvisited
+
+  module KHashtbl = Hashtbl.Make(S.Key)
+
+  let show_state = function
+    | Seen1 -> "Seen1"
+    | Seen2 -> "Seen2"
+    | SeenBoth -> "SeenBoth"
+    | Unvisited -> "Unvisited"
+  
+  let _dump_state ~p ~state ~todo1 ~todo2 =
+    let key x = String.sub (S.Key.to_hum x) 0 4 in
+    let parents = ref [] in
+    p |> KHashtbl.iter (fun p c ->
+      let msg = Printf.sprintf "%s -> [%s]" (key p) (String.concat " " (List.map key c)) in
+      parents := msg :: !parents
+    );
+    Log.debug "Parents:\n%s" (String.concat "\n" !parents);
+    let nodes = ref [] in
+    state |> KHashtbl.iter (fun c s ->
+      nodes := Printf.sprintf "%s=%s" (key c) (show_state s) :: !nodes
+    );
+    Log.debug "State: %s" (String.concat " " !nodes);
+    let show_keys q =
+      Queue.fold (fun acc k -> key k :: acc) [] q
+      |> String.concat " "
+      |> Printf.sprintf "[%s]" in
+    Log.debug "TODO1: %s" (show_keys todo1);
+    Log.debug "TODO2: %s" (show_keys todo2)
+
+  let lcas_fast t ?(max_depth = ~-1) ?n c1 c2 =
+    let key x = String.sub (S.Key.to_hum x) 0 4 in
+    ignore n;
+    let read_parents commit =
+      Store.read_exn t commit >|= S.Val.parents in
+    let lcas = ref KSet.empty in
+    let p : (S.Key.t list) KHashtbl.t = KHashtbl.create 10 in
+    let peek_parents commit =
+      try KHashtbl.find p commit
+      with Not_found -> [] in
+    let parents =
+      fun commit ->
+        try return (KHashtbl.find p commit)
+        with Not_found ->
+          read_parents commit >|= fun parents ->
+          KHashtbl.add p commit parents;
+          parents in
+    let state : state KHashtbl.t = KHashtbl.create 10 in
+    let get x =
+      try KHashtbl.find state x
+      with Not_found -> Unvisited in
+    let todo1 = Queue.create () in
+    let todo2 = Queue.create () in
+    Queue.add c1 todo1;
+    Queue.add c2 todo2;
+    let mark_shared node =
+      Log.debug "Found shared: %s" (key node);
+      lcas := !lcas |> KSet.add node;
+      let todo = Queue.create () in
+      Queue.add node todo;
+      let rec aux () =
+        let next = Queue.take todo in
+        begin match get next with
+        | Seen1 | Seen2 ->
+            (* Log.debug "%s -> SeenBoth" (key next); *)
+            KHashtbl.replace state next SeenBoth;
+            let parents = peek_parents next in
+            parents |> List.iter (fun x -> Queue.add x todo)
+        | SeenBoth ->
+            lcas := !lcas |> KSet.remove next
+        | Unvisited ->
+            (* Log.debug "%s -> SeenBoth" (key next); *)
+            KHashtbl.add state next SeenBoth end;
+        aux () in
+      try aux ()
+      with Queue.Empty -> () in
+    let explore q tag =
+      (* dump_state ~p ~state ~todo1 ~todo2; *)
+      let old_todo = Queue.create () in
+      Queue.transfer q old_todo;
+      let fetches = ref [] in
+      old_todo |> Queue.iter (fun next ->
+        (* TODO: check for c1, c2 exactly *)
+        (* Log.debug "Visit %s (state:%s)" (key next) (show_state (get next)); *)
+        match get next with
+        | SeenBoth -> ()
+        | Unvisited ->
+            KHashtbl.add state next tag;
+            fetches := parents next :: !fetches
+        | seen_me when seen_me = tag -> ()
+        | _seen_other -> mark_shared next
+      );
+      let rec aux = function
+        | [] -> return ()
+        | f :: fs -> f >>= fun parents ->
+            parents |> List.iter (fun p -> Queue.add p q);
+            aux fs in
+      aux !fetches
+    in
+    let rec aux = function
+      | 0 -> return `Max_depth_reached
+      | max_depth ->
+          explore todo1 Seen1 >>= fun () ->
+          explore todo2 Seen2 >>= fun () ->
+          if Queue.is_empty todo1 && Queue.is_empty todo2 then return (`Ok (KSet.to_list !lcas))
+          else aux (max_depth - 1) in
+    aux (max_depth + 2)
+
+  let lcas t ?(max_depth=256) ?n c1 c2 =
+    let key x = String.sub (S.Key.to_hum x) 0 4 in
+    let t0 = Unix.gettimeofday () in
+    lcas_slow t ~max_depth ?n c1 c2 >>= fun r1 ->
+    let t1 = Unix.gettimeofday () in
+    lcas_fast t ~max_depth ?n c1 c2 >|= fun r2 ->
+    let t2 = Unix.gettimeofday () in
+    Log.warn "slow: %.2f  fast: %.2f" (t1 -. t0) (t2 -. t1);
+    match r1, r2 with
+    | `Ok r1, `Ok r2 ->
+        let r1_set = KSet.of_list r1 in
+        let r2_set = KSet.of_list r2 in
+        if not (KSet.equal r1_set r2_set) then (
+          failwith (Printf.sprintf "slow and fast disagree on lcas for %s and %s:\nslow: %s\nfast: %s"
+            (key c1) (key c2)
+            (pr_keys r1_set)
+            (pr_keys r2_set)
+          )
+        );
+        `Ok r1
+    | `Ok _, _ -> failwith "fast failed!"
+    | _, `Ok _ -> failwith "slow failed!"
+    | r1, _ -> r1
 
   let rec three_way_merge t ?max_depth ?n c1 c2 =
     Log.debug "3-way merge between %a and %a"

@@ -1462,6 +1462,9 @@ module Private: sig
           {{:http://en.wikipedia.org/wiki/Lowest_common_ancestor}lca}
           between two commits. *)
 
+      val lcas_fast: t -> ?max_depth:int -> ?n:int -> commit -> commit ->
+        [`Ok of commit list | `Max_depth_reached | `Too_many_lcas ] Lwt.t
+
       val lca: t -> ?max_depth:int -> ?n:int -> commit list ->
         commit option Merge.result Lwt.t
       (** Compute the lowest common ancestors ancestor of a list of

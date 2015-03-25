@@ -446,7 +446,7 @@ module Make (S: Irmin.S) = struct
       assert_lcas "line lcas 2" [kr2] lcas;
 
       S.lcas ~max_depth:2 3 t2 t4 >>= fun lcas ->
-      assert_lcas "line lcas 3" [kr2] lcas;
+      assert_lcas "line lcas 3" [kr2] lcas;       (* XXX: same as prev *)
 
       S.lcas ~max_depth:3 3 t1 t4 >>= fun lcas ->
       assert_lcas "line lcas 4" [kr1] lcas;

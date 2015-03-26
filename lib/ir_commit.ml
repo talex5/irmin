@@ -377,9 +377,10 @@ struct
     Log.debug "TODO1: %s" (show_keys todo1);
     Log.debug "TODO2: %s" (show_keys todo2)
 
-  let lcas_fast t ?(max_depth = ~-1) ?n c1 c2 =
+  exception Quick_exit of S.Key.t list
+
+  let lcas_fast t ?(max_depth = ~-10) ?n c1 c2 =
     let key x = String.sub (S.Key.to_hum x) 0 4 in
-    ignore n;
     let read_parents commit =
       Store.read_exn t commit >|= S.Val.parents in
     let lcas = ref KSet.empty in
@@ -403,10 +404,8 @@ struct
     Queue.add c1 todo1;
     Queue.add c2 todo2;
     let mark_shared node =
-      Log.debug "Found shared: %s" (key node);
-      lcas := !lcas |> KSet.add node;
       let todo = Queue.create () in
-      Queue.add node todo;
+      peek_parents node |> List.iter (fun x -> Queue.add x todo);
       let rec aux () =
         let next = Queue.take todo in
         begin match get next with
@@ -419,17 +418,25 @@ struct
             lcas := !lcas |> KSet.remove next
         | Unvisited ->
             (* Log.debug "%s -> SeenBoth" (key next); *)
+            (* Ideally, we'd continue exploring the graph here and mark everything
+             * because it might turn out that we can remove something else from
+             * [lcas]. However, that requires exploring the entire history in the
+             * common case and we want to avoid that. *)
             KHashtbl.add state next SeenBoth end;
         aux () in
       try aux ()
       with Queue.Empty -> () in
     let explore q tag =
       (* dump_state ~p ~state ~todo1 ~todo2; *)
+      let new_shared = ref [] in
       let old_todo = Queue.create () in
       Queue.transfer q old_todo;
       let fetches = ref [] in
       old_todo |> Queue.iter (fun next ->
-        (* TODO: check for c1, c2 exactly *)
+        begin match tag with
+        | Seen1 when S.Key.equal next c2 -> raise (Quick_exit [c2])
+        | Seen2 when S.Key.equal next c1 -> raise (Quick_exit [c1])
+        | _ -> () end;
         (* Log.debug "Visit %s (state:%s)" (key next) (show_state (get next)); *)
         match get next with
         | SeenBoth -> ()
@@ -437,23 +444,37 @@ struct
             KHashtbl.add state next tag;
             fetches := parents next :: !fetches
         | seen_me when seen_me = tag -> ()
-        | _seen_other -> mark_shared next
+        | _seen_other ->
+            Log.debug "Found shared: %s" (key next);
+            KHashtbl.replace state next SeenBoth;
+            lcas := !lcas |> KSet.add next;
+            begin match n with
+            | Some n when KSet.cardinal !lcas = n -> raise (Quick_exit (KSet.to_list !lcas))
+            | _ -> () end;
+            new_shared := next :: !new_shared
       );
       let rec aux = function
         | [] -> return ()
         | f :: fs -> f >>= fun parents ->
             parents |> List.iter (fun p -> Queue.add p q);
             aux fs in
-      aux !fetches
+      aux !fetches >|= fun () ->
+      (* (do this after fetching all the new parents) *)
+      !new_shared |> List.iter mark_shared
     in
     let rec aux = function
-      | 0 -> return `Max_depth_reached
+      | -2 -> return `Max_depth_reached     (* XXX: Why -2? *)
       | max_depth ->
           explore todo1 Seen1 >>= fun () ->
           explore todo2 Seen2 >>= fun () ->
           if Queue.is_empty todo1 && Queue.is_empty todo2 then return (`Ok (KSet.to_list !lcas))
           else aux (max_depth - 1) in
-    aux (max_depth + 2)
+    Lwt.catch
+      (fun () -> aux max_depth)
+      (function
+        | Quick_exit results -> return (`Ok results)
+        | ex -> fail ex
+      )
 
   let lcas t ?(max_depth=256) ?n c1 c2 =
     let key x = String.sub (S.Key.to_hum x) 0 4 in
@@ -462,19 +483,24 @@ struct
     let t1 = Unix.gettimeofday () in
     lcas_fast t ~max_depth ?n c1 c2 >|= fun r2 ->
     let t2 = Unix.gettimeofday () in
-    Log.warn "slow: %.2f  fast: %.2f" (t1 -. t0) (t2 -. t1);
+    Log.warn "slow: %.4f  fast: %.4f" (t1 -. t0) (t2 -. t1);
     match r1, r2 with
     | `Ok r1, `Ok r2 ->
         let r1_set = KSet.of_list r1 in
         let r2_set = KSet.of_list r2 in
         if not (KSet.equal r1_set r2_set) then (
-          failwith (Printf.sprintf "slow and fast disagree on lcas for %s and %s:\nslow: %s\nfast: %s"
-            (key c1) (key c2)
+          let n =
+            match n with
+            | None -> "(no limit)"
+            | Some n -> Printf.sprintf "(n=%d)" n in
+          failwith (Printf.sprintf "slow and fast disagree on lcas for %s and %s %s:\nslow: %s\nfast: %s"
+            (key c1) (key c2) n
             (pr_keys r1_set)
             (pr_keys r2_set)
           )
         );
         `Ok r1
+    | `Ok _, `Max_depth_reached -> failwith "fast failed (Max_depth_reached)!"
     | `Ok _, _ -> failwith "fast failed!"
     | _, `Ok _ -> failwith "slow failed!"
     | r1, _ -> r1

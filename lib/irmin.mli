@@ -1612,6 +1612,8 @@ module Private: sig
       val iter_commits: t -> (commit -> unit Lwt.t) -> unit Lwt.t
       (** [iter_commits t f] calls [f] on [t]'s commits. *)
 
+      val implode : contents list * node list * commit list -> t
+      val explode : t -> contents list * node list * commit list
     end
 
     (** Build simple slices. *)

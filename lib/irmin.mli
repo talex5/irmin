@@ -341,13 +341,6 @@ module type RO = sig
   type value
   (** Type for values. *)
 
-  val create: config -> 'a Task.f -> ('a -> t) Lwt.t
-  (** [create config task] is a function returning fresh store
-      handles, with the configuration [config] and fresh tasks
-      computed using [task]. [config] is provided by the backend and
-      [task] is the provided by the user. The operation might be
-      blocking, depending on the backend. *)
-
   val config: t -> config
   (** [config t] is [t]'s config. *)
 
@@ -376,6 +369,13 @@ module type AO = sig
   (** {1 Append-only stores} *)
 
   include RO
+
+  val create: config -> 'a Task.f -> ('a -> t) Lwt.t
+  (** [create config task] is a function returning fresh store
+      handles, with the configuration [config] and fresh tasks
+      computed using [task]. [config] is provided by the backend and
+      [task] is the provided by the user. The operation might be
+      blocking, depending on the backend. *)
 
   val add: t -> value -> key Lwt.t
   (** Write the contents of a value to the store. It's the
@@ -496,6 +496,13 @@ module type BC = sig
       [create config task] is a persistent branch using the
       {Tag.S.master} branch. This operation is cheap, can be repeated
       multiple times. *)
+
+  val create: config -> 'a Task.f -> ('a -> t) Lwt.t
+  (** [create config task] is a function returning fresh store
+      handles, with the configuration [config] and fresh tasks
+      computed using [task]. [config] is provided by the backend and
+      [task] is the provided by the user. The operation might be
+      blocking, depending on the backend. *)
 
   type tag
   (** Type for persistent branch names. Tags usually share a common
@@ -964,6 +971,8 @@ module Tag: sig
     (** {1 Tag Store} *)
 
     include RRW
+
+    val create: config -> ('a -> task) -> ('a -> t) Lwt.t
 
     module Key: S with type t = key
     (** Base functions on keys. *)
@@ -2224,8 +2233,10 @@ module type AO_MAKER =
     implementation of values.*)
 module type RW_MAKER =
   functor (K: Hum.S) ->
-  functor (V: Tc.S0) ->
-    RRW with type key = K.t and type value = V.t
+  functor (V: Tc.S0) -> sig
+    include RRW with type key = K.t and type value = V.t
+    val create: config -> ('a -> task) -> ('a -> t) Lwt.t
+  end
 
 module Make (AO: AO_MAKER) (RW: RW_MAKER): S_MAKER
 (** Simple store creator. Use the same type of all of the internal

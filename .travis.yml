@@ -1,16 +1,25 @@
 language: c
 install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/master/.travis-opam.sh
 script: bash -ex .travis-opam.sh
-sudo: required
+sudo: false
+addons:
+  apt:
+    sources:
+    - avsm
+    packages:
+    - ocaml
+    - ocaml-base
+    - ocaml-native-compilers
+    - ocaml-compiler-libs
+    - ocaml-interp
+    - ocaml-base-nox
+    - ocaml-nox
+    - camlp4
+    - camlp4-extra
+    - libgmp-dev
+    - libssl-dev
+    - time
+    - libcurl3
+    - curl
 env:
-  global:
-  - ALCOTEST_SHOW_ERRORS=1
-  - REVDEPS="irmin-indexeddb"
-  - PACKAGE=irmin.0.9.9
-  matrix:
-  - OCAML_VERSION=4.01
-  - OCAML_VERSION=4.02
-  - OCAML_VERSIOM=4.02 DEPOTS=cohttp
-  - OCAML_VERSIOM=4.01 DEPOTS=git
-  - OCAML_VERSIOM=4.01 DEPOTS="cohttp git"
-  - OCAML_VERSION=4.01 DEPOTS=mirage-git
+  - FORK_USER=talex5 FORK_BRANCH=containers TESTS=true ALCOTEST_SHOW_ERRORS=1 REVDEPS="irmin-indexeddb" PACKAGE=irmin.0.9.9

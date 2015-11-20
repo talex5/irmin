@@ -29,9 +29,13 @@ module type GRAPH = sig
   type node
   type step
   type path
+  type metadata
 
   val empty: t -> node Lwt.t
   val create: t -> (step * [`Contents of contents | `Node of node]) list -> node Lwt.t
+
+  val read_full: t -> node -> path ->
+    (metadata * [`Contents of contents | `Node of node]) option Lwt.t
 
   val contents: t -> node -> step -> contents option Lwt.t
   val succ: t -> node -> step -> node option Lwt.t
@@ -68,3 +72,4 @@ module Graph (C: Ir_s.CONTENTS_STORE)
            and type node = S.key
            and type step = S.Path.step
            and type path = S.Path.t
+           and type metadata = S.Val.metadata

@@ -446,6 +446,11 @@ module Make (P: Ir_s.PRIVATE) = struct
   module Private = struct
     include P
 
+    let read_full t path =
+      read_head_node t >>= function
+      | None -> return_none
+      | Some root -> Graph.read_full (graph_t t) root path
+
     let read_node t path =
       read_head_node t >>= function
       | None   -> return_none

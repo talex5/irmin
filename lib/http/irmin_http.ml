@@ -545,6 +545,9 @@ struct
     head_ref: [`Branch of Ref.t | `Head of Hash.t | `Empty] ref;
     l: L.t;
     repo: Repo.t;
+    read_full: L.key ->
+      (LP.Node.Val.metadata * [ `Contents of LP.Contents.key | `Node of LP.Node.key ])
+      option Lwt.t;
     read_node: L.key -> LP.Node.key option Lwt.t;
     mem_node: L.key -> bool Lwt.t;
     update_node: L.key -> LP.Node.key -> unit Lwt.t;
@@ -586,6 +589,7 @@ struct
       let l = l a in
       let read_node = LP.read_node l in
       let mem_node = LP.mem_node l in
+      let read_full = LP.read_full l in
       let update_node = LP.update_node l in
       let remove_node = LP.remove_node l in
       let merge_node = LP.merge_node l in
@@ -593,7 +597,7 @@ struct
       let lock = Lwt_mutex.create () in
       { l; head_ref;
         read_node; mem_node; update_node; remove_node; merge_node;
-        repo; lock; iter_node; }
+        read_full; repo; lock; iter_node; }
     in
     Lwt.return fn
 
@@ -885,6 +889,7 @@ struct
       include L.Private.Sync
       let create t = create t.Repo.l
     end
+    let read_full t = t.read_full
     let update_node t = t.update_node
     let merge_node t = t.merge_node
     let remove_node t = t.remove_node

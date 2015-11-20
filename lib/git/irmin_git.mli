@@ -102,6 +102,7 @@ module type S_MAKER =
        and type value = C.t
        and type branch_id = R.t
        and type commit_id = H.t
+       and type Private.Node.Val.metadata = Git.Tree.perm
 
 module Memory (IO: Git.Sync.IO) (I: Git.Inflate.S):
   S_MAKER

@@ -88,6 +88,7 @@ module type NODE = sig
   type contents
   type node
   type step
+  type metadata
 
   val create: (step * [`Contents of contents | `Node of node]) list -> t
   val alist: t -> (step * [`Contents of contents | `Node of node]) list
@@ -102,6 +103,9 @@ module type NODE = sig
   val succ: t -> step -> node option
   val iter_succ: t -> (step -> node -> unit) -> unit
   val with_succ: t -> step -> node option -> t
+
+  val root_metadata: metadata
+  val read_full: t -> step -> (metadata * [`Contents of contents | `Node of node]) option
 end
 
 module type NODE_STORE = sig
@@ -308,6 +312,7 @@ module type STORE_EXT = sig
        and type Ref.key = branch_id
        and type Slice.t = slice
        and type Repo.t = Repo.t
+    val read_full: t -> key -> (Node.Val.metadata * [`Contents of Contents.key | `Node of Node.key]) option Lwt.t
     val read_node: t -> key -> Node.key option Lwt.t
     val mem_node: t -> key -> bool Lwt.t
     val update_node: t -> key -> Node.key -> unit Lwt.t

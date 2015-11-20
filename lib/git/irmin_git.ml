@@ -204,6 +204,7 @@ module Irmin_value_store
       type contents = GK.t
       type node = GK.t
       type step = Path.step
+      type metadata = Git.Tree.perm
 
       let compare = Git.Tree.compare
       let equal = Git.Tree.equal
@@ -240,6 +241,20 @@ module Irmin_value_store
         try
           List.find (fun { Git.Tree.perm; name; _ } -> p perm && name = s) t
           |> fun v -> Some v.Git.Tree.node
+        with Not_found ->
+          None
+
+      let root_metadata = `Dir
+
+      let read_full t s =
+        let s = S.to_hum s in
+        try
+          let v = List.find (fun i -> i.Git.Tree.name = s) t in
+          let perm = v.Git.Tree.perm in
+          Some (perm,
+            if perm = `Dir then `Node v.Git.Tree.node
+            else `Contents v.Git.Tree.node
+          )
         with Not_found ->
           None
 
@@ -817,5 +832,6 @@ module type S_MAKER =
        and type value = C.t
        and type branch_id = R.t
        and type commit_id = H.t
+       and type Private.Node.Val.metadata = Git.Tree.perm
 
 include Conf

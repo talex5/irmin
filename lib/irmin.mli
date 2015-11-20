@@ -1285,6 +1285,9 @@ module Private: sig
       type step
       (** The type for steps between nodes. *)
 
+      type metadata
+      (** The type for metadata attached to a step. *)
+
       val create: (step * [`Contents of contents | `Node of node]) list -> t
       (** [create l] is a new node. *)
 
@@ -1323,6 +1326,11 @@ module Private: sig
       (** [replace_succ t s n] replaces [t]'s successor for the step
           [s] by [n]. *)
 
+      val root_metadata: metadata
+      (** The metadata for the root (which doesn't have a step). *)
+
+      val read_full: t -> step -> (metadata * [`Contents of contents | `Node of node]) option
+      (** [read_full t step] is the full information associated with [step]. *)
     end
 
     (** [Node] provides a simple node implementation, parameterized by
@@ -1364,6 +1372,9 @@ module Private: sig
       type node
       (** The type for node values. *)
 
+      type metadata
+      (** The type for metadata attached to a step. *)
+
       type step
       (** The type of steps. A step is used to pass from one node to
           another. *)
@@ -1378,6 +1389,10 @@ module Private: sig
       val create: t -> (step * [`Contents of contents | `Node of node]) list
         -> node Lwt.t
       (** Create a new node. *)
+
+      val read_full: t -> node -> path -> (metadata * [`Contents of contents | `Node of node]) option Lwt.t
+      (** [read_full t path] is the full information associated with the final
+          step of [path]. *)
 
       val contents: t -> node -> step -> contents option Lwt.t
       (** [contents t n s] is [n]'s contents in [t], associated to the
@@ -1776,6 +1791,7 @@ module type S = sig
        and type Ref.key = branch_id
        and type Slice.t = slice
        and type Repo.t = Repo.t
+    val read_full: t -> key -> (Node.Val.metadata * [`Contents of Contents.key | `Node of Node.key]) option Lwt.t
     val read_node: t -> key -> Node.key option Lwt.t
     val mem_node: t -> key -> bool Lwt.t
     val update_node: t -> key -> Node.key -> unit Lwt.t
@@ -2290,3 +2306,4 @@ module Make_ext (P: Private.S): S
    and type commit_id = P.Ref.value
    and type Key.step = P.Contents.Path.step
    and type Repo.t = P.Repo.t
+   and type Private.Node.Val.metadata = P.Node.Val.metadata

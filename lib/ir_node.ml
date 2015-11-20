@@ -26,6 +26,7 @@ module Make (K_c: Tc.S0) (K_n: Tc.S0) (P: Ir_s.PATH) = struct
   type contents = K_c.t
   type node = K_n.t
   type step = P.step
+  type metadata = unit
 
   module Path = P
   module StepMap = Ir_misc.Map(P.Step)
@@ -114,6 +115,14 @@ module Make (K_c: Tc.S0) (K_n: Tc.S0) (P: Ir_s.PATH) = struct
     try Some (StepMap.find l (Lazy.force t.succ))
     with Not_found -> None
 
+  let root_metadata = ()
+
+  let read_full t l =
+    try Some ((), `Node (StepMap.find l (Lazy.force t.succ)))
+    with Not_found ->
+    try Some ((), `Contents (StepMap.find l (Lazy.force t.contents)))
+    with Not_found -> None
+
   module Y = Tc.List (Tc.Pair (P.Step)(X) )
 
   let to_json t = Y.to_json t.alist
@@ -178,9 +187,13 @@ module type GRAPH = sig
   type node
   type step
   type path
+  type metadata
 
   val empty: t -> node Lwt.t
   val create: t -> (step * [`Contents of contents | `Node of node]) list -> node Lwt.t
+
+  val read_full: t -> node -> path ->
+    (metadata * [`Contents of contents | `Node of node]) option Lwt.t
 
   val contents: t -> node -> step -> contents option Lwt.t
   val succ: t -> node -> step -> node option Lwt.t
@@ -219,6 +232,7 @@ struct
   type contents = C.key
   type node = S.key
   type path = Path.t
+  type metadata = S.Val.metadata
 
   module Store = struct
 
@@ -381,6 +395,21 @@ struct
         succ t node h >>= function
         | None      -> Lwt.fail Not_found
         | Some node -> aux node tl
+    in
+    aux node path
+
+  let read_full t node path =
+    let rec aux node path =
+      match Path.decons path with
+      | None -> Lwt.return (Some (S.Val.root_metadata, `Node node))
+      | Some (h, e) when Path.is_empty e ->
+        begin Store.read t node >|= function
+        | None -> None
+        | Some n -> S.Val.read_full n h end
+      | Some (h, tl) ->
+        succ t node h >>= function
+        | Some node -> aux node tl
+        | None -> Lwt.return None
     in
     aux node path
 

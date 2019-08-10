@@ -8,7 +8,7 @@ dev-repo:     "https://github.com/mirage/irmin.git"
 
 build: [
   ["./configure" "--prefix" prefix
-      "--%{cohttp:enable}%-http"
+      "--disable-http"
       "--%{git:enable}%-git"
       "--%{base-unix+git-unix:enable}%-unix"
       "--%{mirage-git:enable}%-mirage"]
@@ -38,18 +38,15 @@ depends: [
   "crunch"
   "base-unix" {test}
   "git"       {test}
-  "cohttp"    {test}
   "alcotest"  {test & >="0.4.1"}
 ]
 depopts: [
   "base-unix"
   "git"
   "git-unix"
-  "cohttp"
   "mirage-git"
 ]
 conflicts: [
-  "cohttp" {< "0.18.3"}
   "git"    {< "1.7.1"}
   "conduit" {< "0.9.0"}
 ]

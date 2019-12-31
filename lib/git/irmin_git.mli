@@ -54,11 +54,13 @@ module Irmin_value_store
   module Contents: Irmin.Contents.STORE
     with type key = H.t
      and type value = C.t
+     and type t = G.t
      and module Key = H
      and module Path = C.Path
 
   module Node: Irmin.Private.Node.STORE
     with type key = H.t
+     and type t = Contents.t * G.t
      and type Val.raw_contents = Contents.key
      and module Key = H
      and module Path = Contents.Val.Path
@@ -67,6 +69,7 @@ module Irmin_value_store
   module Commit: Irmin.Private.Commit.STORE
     with type key = H.t
      and module Key = H
+     and type t = Node.t * G.t
      and type Val.node = Node.key
 end
 

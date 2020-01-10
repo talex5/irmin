@@ -107,30 +107,6 @@ module Git: sig
 
 end
 
-(** REST (over HTTP) backend.. *)
-module Http: sig
-
-  (** {1 HTTP client} *)
-
-  module Make: Irmin.S_MAKER
-  (** [Make] provides bindings to the remote HTTP server.
-
-      Only the {{!Irmin.S.Private}low-level operations} are forwarded
-      to the server, all the high-level logic is done on the
-      client. Hence a high-level operation might take multiple
-      RTTs. *)
-
-  module KV: Irmin.KV_MAKER
-
-  (** {1 HTTP server} *)
-
-  (** Server-side of the REST API over HTTP. *)
-  module Server (S: Irmin.S): Irmin_http_server.S
-    with type repo = S.Repo.t
-     and type t = Cohttp_lwt_unix.Server.t
-
-end
-
 val set_listen_dir_hook: unit -> unit
 (** Install {!Irmin_watcher.hook} as the listen hook for watching
     changes in directories. *)

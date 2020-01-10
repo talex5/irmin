@@ -54,18 +54,6 @@ module Git = struct
   end
 end
 
-module Http = struct
-  module Make = Irmin_http.Make(Cohttp_lwt_unix.Client)
-  module KV (C: Irmin.Contents.S) =
-    Make
-      (Irmin.Metadata.None)
-      (C)
-      (Irmin.Path.String_list)
-      (Irmin.Branch.String)
-      (Irmin.Hash.SHA1)
-  module Server = Irmin_http_server.Make (Cohttp_lwt_unix.Server)
-end
-
 let info ?author fmt =
   Fmt.kstrf (fun msg () ->
       let date = Int64.of_float (Unix.gettimeofday ()) in

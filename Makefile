@@ -1,6 +1,6 @@
 .PHONY: all clean test
 
-BUILD=jbuilder build --dev
+BUILD=dune build -p irmin-unix
 RUNTEST=jbuilder runtest -j1 --no-buffer --dev
 
 all:

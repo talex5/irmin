@@ -1,0 +1,18 @@
+(library
+ (name test_unix)
+ (modules test_unix)
+ (libraries test test_fs test_git test_http irmin-unix))
+
+(executable
+ (name test)
+ (modules test)
+ (libraries test_unix))
+
+(alias
+ (name runtest)
+ (package irmin-unix)
+ (deps test.exe)
+ (action
+  (chdir
+   %{workspace_root}
+   (run %{exe:test.exe} -q --color=always))))

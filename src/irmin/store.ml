@@ -237,14 +237,15 @@ module Make (P: S.PRIVATE) = struct
           (type s)
           (module S: S.AO with type t = s and type key = k and type value = v)
           (dk: k Type.t)
+          (dv: v Type.t)
           fn
           (s:t -> s)
         =
         fn (fun (k, v) ->
             S.add (s t) v >>= fun k' ->
             if not (Type.equal dk k k') then (
-              import_error "%s import error: expected %a, got %a"
-                name Type.(dump dk) k Type.(dump dk) k'
+              import_error "%s import error: expected %a, got %a: %S"
+                name Type.(dump dk) k Type.(dump dk) k' (Type.encode_cstruct dv v |> Cstruct.to_string)
             )
             else Lwt.return_unit
           )
@@ -258,13 +259,13 @@ module Make (P: S.PRIVATE) = struct
           | `Commit c   -> commits := c :: !commits; Lwt.return_unit
         ) >>= fun () ->
       Lwt.catch (fun () ->
-          aux "Contents" (module P.Contents) P.Contents.Key.t
+          aux "Contents" (module P.Contents) P.Contents.Key.t P.Contents.Val.t
             (fun f -> Lwt_list.iter_s f !contents) contents_t
           >>= fun () ->
-          aux "Node" (module P.Node) P.Node.Key.t
+          aux "Node" (module P.Node) P.Node.Key.t P.Node.Val.t
             (fun f -> Lwt_list.iter_s f !nodes) node_t
           >>= fun () ->
-          aux "Commit" (module P.Commit) P.Commit.Key.t
+          aux "Commit" (module P.Commit) P.Commit.Key.t P.Commit.Val.t
             (fun f -> Lwt_list.iter_s f !commits) commit_t
           >|= fun () ->
           Ok ())

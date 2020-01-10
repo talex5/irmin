@@ -4,7 +4,8 @@ BUILD=dune build -p irmin-unix
 RUNTEST=jbuilder runtest -j1 --no-buffer --dev
 
 all:
-	$(BUILD)
+	dune build -p irmin
+	dune build -p irmin-unix
 
 test:
 	$(RUNTEST)

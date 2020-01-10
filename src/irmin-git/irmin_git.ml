@@ -412,8 +412,9 @@ module Irmin_value_store
         Git.Hash.to_tree (Git_hash.of_raw (H.to_raw k))
 
       let info_of_git author message =
-        let id = author.Git.User.name in
-        let date, _ = author.Git.User.date in (* FIXME: tz offset is ignored *)
+        let { Git.User.name; email; date } = author in
+        let id = Printf.sprintf "%s <%s>" name email in
+        let date = fst date in (* FIXME: tz offset is ignored *)
         Irmin.Info.v ~date ~author:id message
 
       let name_email name =

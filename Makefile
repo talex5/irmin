@@ -1,10 +1,11 @@
 .PHONY: all clean test
 
-BUILD=dune build -p irmin-unix
+BUILD=dune build -p irmin-unix --dev
 RUNTEST=jbuilder runtest -j1 --no-buffer --dev
 
 all:
 	dune build -p irmin
+	dune build -p irmin-git
 	dune build -p irmin-unix
 
 test:

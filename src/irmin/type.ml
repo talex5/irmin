@@ -887,6 +887,7 @@ module Decode_cstruct = struct
   let int buf ofs = int64 buf ofs >|= Int64.to_int
   let float buf ofs = int64 buf ofs >|= Int64.float_of_bits
 
+  [@@@ocaml.warning "-3"]
   let string buf ofs =
     int buf ofs >>= fun (ofs, len) ->
     let str = Bytes.create len in

@@ -417,6 +417,7 @@ module Irmin_value_store
         Irmin.Info.v ~date ~author:id message
 
       let name_email name =
+        Printf.printf "name_email %S\n%!" name;
         let name = String.trim name in
         try
           let i = String.rindex name ' ' in

@@ -442,6 +442,11 @@ struct
       let info g =
         let author = G.Value.Commit.author g in
         let message = G.Value.Commit.message g in
+        let message =
+          if String.length message > 0 && message.[0] = '\n' then
+            String.sub message 1 (String.length message - 1)
+          else message
+        in
         info_of_git author message
 
       module C = Irmin.Private.Commit.Make (H)
